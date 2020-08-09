@@ -37,6 +37,7 @@ uint8_t buttonPressedFlag =RESET;
 TaskHandle_t xButtonHandle = NULL;
 TaskHandle_t xLEDHandle = NULL;
 
+char msg[100];
 int main(void)
 {
 //to use semihosting add this macro to preprocessor symbols
@@ -55,8 +56,8 @@ int main(void)
 	//TaskHandle_t * const pxCreatedTask )
 
 	//create tasks
-	xTaskCreate(vTaskButton,"Button_Task",configMINIMAL_STACK_SIZE,NULL,2,&xButtonHandle);
-	xTaskCreate(vTaskLED,"LED_Task",configMINIMAL_STACK_SIZE,NULL,2,&xLEDHandle);
+	xTaskCreate(vTaskButton,"Button_Task",500,NULL,2,&xButtonHandle);
+	xTaskCreate(vTaskLED,"LED_Task",500,NULL,2,&xLEDHandle);
 
 	//start scheduler
 	vTaskStartScheduler();
@@ -72,7 +73,7 @@ void vTaskButton(void *params)
 			//crude blocking debounce
 			rtos_delay(100);
 			//send notification to LED task
-			xTaskNotify(xLEDHandle,0,eNoAction);
+			xTaskNotify(xLEDHandle,0,eIncrement);
 			printMsg("Button Task\n\r");
 		}
 
@@ -80,14 +81,17 @@ void vTaskButton(void *params)
 }
 void vTaskLED(void *params)
 {
+	uint32_t notificationCount =0;
+
 	for(;;)
 	{
 		//wait for notification. till then don't execute
 		//ulBitsToClearOnEntry, ulBitsToClearOnExit,*pulNotificationValue, xTicksToWait
-		if(xTaskNotifyWait(0,0,NULL,portMAX_DELAY) == pdTRUE)
+		if(xTaskNotifyWait(0,0,&notificationCount,portMAX_DELAY) == pdTRUE)
 		{
+			sprintf(msg,"Notification count : %ld\n\r",notificationCount);
 			toggleLED();
-			printMsg("LED toggle\n\r");
+			printMsg(msg);
 		}
 		printMsg("LED Task\n\r");
 
