@@ -15,7 +15,7 @@
 #include "task.h"
 #include <string.h>
 
-
+void rtos_delay(uint32_t delayInMS);
 static void prvSetupHardware(void);
 static void prvSetupUART(void);
 static void prvSetupLEDs(void);
@@ -23,15 +23,19 @@ static void prvSetupButton(void);
 void printMsg(char *msg);
 void setLED(void);
 void resetLED(void);
+void toggleLED(void);
+
 //for arm semihosting for printf
 //changed in debug startup, linker and in main
 //check udemy understanding arm semihosting, lesson 40
 
+void vTaskButton(void *params);
 void vTaskLED(void *params);
 
 uint8_t buttonPressedFlag =RESET;
 
-TaskHandle_t xTaskHandle2 = NULL;
+TaskHandle_t xButtonHandle = NULL;
+TaskHandle_t xLEDHandle = NULL;
 
 int main(void)
 {
@@ -51,27 +55,41 @@ int main(void)
 	//TaskHandle_t * const pxCreatedTask )
 
 	//create tasks
-	xTaskCreate(vTaskLED,"LED_Task",configMINIMAL_STACK_SIZE,NULL,2,&xTaskHandle2);
+	xTaskCreate(vTaskButton,"Button_Task",configMINIMAL_STACK_SIZE,NULL,2,&xButtonHandle);
+	xTaskCreate(vTaskLED,"LED_Task",configMINIMAL_STACK_SIZE,NULL,2,&xLEDHandle);
 
 	//start scheduler
 	vTaskStartScheduler();
 	for(;;);
 }
 
-
+void vTaskButton(void *params)
+{
+	for(;;)
+	{
+		if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_0) == SET)
+		{
+			//crude blocking debounce
+			rtos_delay(100);
+			//send notification to LED task
+			xTaskNotify(xLEDHandle,0,eNoAction);
+		}
+		printMsg("Button Task\n\r");
+	}
+}
 void vTaskLED(void *params)
 {
 	for(;;)
 	{
-		if(buttonPressedFlag == SET)
+		//wait for notification. till then don't execute
+		//ulBitsToClearOnEntry, ulBitsToClearOnExit,*pulNotificationValue, xTicksToWait
+		if(xTaskNotifyWait(0,0,NULL,portMAX_DELAY) == pdTRUE)
 		{
-			setLED();
-		}
-		else
-		{
-			resetLED();
+			toggleLED();
+			printMsg("LED toggle\n\r");
 		}
 		printMsg("LED Task\n\r");
+
 	}
 }
 static void prvSetupUART(void)
@@ -130,7 +148,7 @@ static void prvSetupButton(void)
 
 	//setup interrupt for button
 	//setup external interrupt controller block (EXTI)
-	SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA, EXTI_PinSource0);
+/*	SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA, EXTI_PinSource0);
 	//Setup EXTI Line
 	extiConfig.EXTI_Line = EXTI_Line0;
 	extiConfig.EXTI_Mode = EXTI_Mode_Interrupt;
@@ -143,6 +161,14 @@ static void prvSetupButton(void)
 	NVIC_SetPriority(EXTI0_IRQn,5);
 	//enable button IRQ
 	NVIC_EnableIRQ(EXTI0_IRQn);
+	*/
+}
+void toggleLED(void)
+{
+	GPIO_ToggleBits(GPIOD,GPIO_Pin_12);
+	GPIO_ToggleBits(GPIOD,GPIO_Pin_13);
+	GPIO_ToggleBits(GPIOD,GPIO_Pin_14);
+	GPIO_ToggleBits(GPIOD,GPIO_Pin_15);
 }
 void setLED(void)
 {
@@ -195,14 +221,21 @@ void printMsg(char *msg)
 }
 
 //button interrupt handler
+/*
 void EXTI0_IRQHandler(void)
 {
 	//clear the interrupt pending bit for EXTI line 0
 	EXTI_ClearITPendingBit(EXTI_Line0);
 	buttonPressedFlag ^= 1;
 }
+*/
+void rtos_delay(uint32_t delayInMS)
+{
+	uint32_t currentTickCount = xTaskGetTickCount();
+	uint32_t delayInTicks = (delayInMS * configTICK_RATE_HZ)/1000;
 
-
+	while(xTaskGetTickCount() < (currentTickCount + delayInTicks));
+}
 
 
 
