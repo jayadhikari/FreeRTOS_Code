@@ -27,11 +27,10 @@ void resetLED(void);
 //changed in debug startup, linker and in main
 //check udemy understanding arm semihosting, lesson 40
 
-void vTaskButton(void *params);
 void vTaskLED(void *params);
 
 uint8_t buttonPressedFlag =RESET;
-TaskHandle_t xTaskHandle1 = NULL;
+
 TaskHandle_t xTaskHandle2 = NULL;
 
 int main(void)
@@ -52,7 +51,6 @@ int main(void)
 	//TaskHandle_t * const pxCreatedTask )
 
 	//create tasks
-	xTaskCreate(vTaskButton,"Button_Task",configMINIMAL_STACK_SIZE,NULL,2,&xTaskHandle1);
 	xTaskCreate(vTaskLED,"LED_Task",configMINIMAL_STACK_SIZE,NULL,2,&xTaskHandle2);
 
 	//start scheduler
@@ -60,22 +58,6 @@ int main(void)
 	for(;;);
 }
 
-
-void vTaskButton(void *params)
-{
-	for(;;)
-	{
-		if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_0) == SET)
-		{
-			buttonPressedFlag = SET;
-		}
-		else
-		{
-			buttonPressedFlag = RESET;;
-		}
-		printMsg("Button Task\n\r");
-	}
-}
 
 void vTaskLED(void *params)
 {
@@ -130,10 +112,15 @@ static void prvSetupUART(void)
 static void prvSetupButton(void)
 {
 	GPIO_InitTypeDef  gpioConfig;
+	EXTI_InitTypeDef extiConfig;
+
 	//enable GPIOD peripheral bus clock
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA,ENABLE);
+	//enable clock for SYSCFG block. This controls the exti interrupt
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG,ENABLE);
 	//clear GPIO config structure
 	memset(&gpioConfig,0,sizeof(gpioConfig));
+	memset(&extiConfig,0,sizeof(extiConfig));
 	//set PA0
 	gpioConfig.GPIO_Pin = GPIO_Pin_0;
 	gpioConfig.GPIO_Mode = GPIO_Mode_IN;	//set alternate function mode
@@ -141,6 +128,21 @@ static void prvSetupButton(void)
 	gpioConfig.GPIO_PuPd = GPIO_PuPd_NOPULL;	//enable pull up on both pins
 	GPIO_Init(GPIOA, &gpioConfig);			//set the pin config
 
+	//setup interrupt for button
+	//setup external interrupt controller block (EXTI)
+	SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA, EXTI_PinSource0);
+	//Setup EXTI Line
+	extiConfig.EXTI_Line = EXTI_Line0;
+	extiConfig.EXTI_Mode = EXTI_Mode_Interrupt;
+	extiConfig.EXTI_Trigger = EXTI_Trigger_Falling;
+	extiConfig.EXTI_LineCmd = ENABLE;
+	EXTI_Init(&extiConfig);
+
+	//Setup NVIC for IRQ number
+	//priority and IRQ number can be found in Vector table for STM32F405xx/07xx and STM32F415xx/17xx
+	NVIC_SetPriority(EXTI0_IRQn,5);
+	//enable button IRQ
+	NVIC_EnableIRQ(EXTI0_IRQn);
 }
 void setLED(void)
 {
@@ -192,7 +194,13 @@ void printMsg(char *msg)
 	}
 }
 
-
+//button interrupt handler
+void EXTI0_IRQHandler(void)
+{
+	//clear the interrupt pending bit for EXTI line 0
+	EXTI_ClearITPendingBit(EXTI_Line0);
+	buttonPressedFlag ^= 1;
+}
 
 
 
