@@ -17,7 +17,8 @@
 //for arm semihosting for printf
 //changed in debug startup, linker and in main
 //check udemy understanding arm semihosting, lesson 40
-extern void initialise_monitor_handles();
+static void prvSetupHardware(void);
+extern void initialise_monitor_handles(void);
 
 void vTask1Function(void *params);
 void vTask2Function(void *params);
@@ -27,7 +28,11 @@ TaskHandle_t xTaskHandle2 = NULL;
 
 int main(void)
 {
+//to use semihosting add this macro to preprocessor symbols
+//project->properties->c/c++Build->preprocessor->add->USE_SEMIHOSTING
+#ifdef USE_SEMIHOSTING
 	initialise_monitor_handles();
+#endif
 	RCC_DeInit();//reset RCC to default config of HSI clock of 16 Mhz
 	SystemCoreClockUpdate();//update to default clock
 
@@ -53,7 +58,9 @@ void vTask1Function(void *params)
 {
 	for(;;)
 	{
+#ifdef USE_SEMIHOSTING
 		printf("task 1 printing\n");
+#endif
 	}
 }
 
@@ -61,6 +68,12 @@ void vTask2Function(void *params)
 {
 	for(;;)
 	{
+#ifdef USE_SEMIHOSTING
 		printf("task 2 printing\n");
+#endif
 	}
+}
+static void prvSetupHardware(void)
+{
+
 }
