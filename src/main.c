@@ -73,8 +73,9 @@ void vTaskButton(void *params)
 			rtos_delay(100);
 			//send notification to LED task
 			xTaskNotify(xLEDHandle,0,eNoAction);
+			printMsg("Button Task\n\r");
 		}
-		printMsg("Button Task\n\r");
+
 	}
 }
 void vTaskLED(void *params)
