@@ -18,17 +18,19 @@
 
 static void prvSetupHardware(void);
 static void prvSetupUART(void);
+static void prvSetupLEDs(void);
+static void prvSetupButton(void);
 void printMsg(char *msg);
+void setLED(void);
+void resetLED(void);
 //for arm semihosting for printf
 //changed in debug startup, linker and in main
 //check udemy understanding arm semihosting, lesson 40
 
-#ifdef USE_SEMIHOSTING
-extern void initialise_monitor_handles(void);
-#endif
-void vTask1Function(void *params);
-void vTask2Function(void *params);
+void vTaskButton(void *params);
+void vTaskLED(void *params);
 
+uint8_t buttonPressedFlag =RESET;
 TaskHandle_t xTaskHandle1 = NULL;
 TaskHandle_t xTaskHandle2 = NULL;
 
@@ -36,10 +38,7 @@ int main(void)
 {
 //to use semihosting add this macro to preprocessor symbols
 //project->properties->c/c++Build->preprocessor->add->USE_SEMIHOSTING
-#ifdef USE_SEMIHOSTING
-	initialise_monitor_handles();
-#endif
-	RCC_DeInit();//reset RCC to default config of HSI clock of 16 Mhz
+ 	RCC_DeInit();//reset RCC to default config of HSI clock of 16 Mhz
 	SystemCoreClockUpdate();//update to default clock
 	prvSetupHardware();
 
@@ -53,8 +52,8 @@ int main(void)
 	//TaskHandle_t * const pxCreatedTask )
 
 	//create tasks
-	xTaskCreate(vTask1Function,"Task1",configMINIMAL_STACK_SIZE,NULL,2,&xTaskHandle1);
-	xTaskCreate(vTask2Function,"Task2",configMINIMAL_STACK_SIZE,NULL,2,&xTaskHandle2);
+	xTaskCreate(vTaskButton,"Button_Task",configMINIMAL_STACK_SIZE,NULL,2,&xTaskHandle1);
+	xTaskCreate(vTaskLED,"LED_Task",configMINIMAL_STACK_SIZE,NULL,2,&xTaskHandle2);
 
 	//start scheduler
 	vTaskStartScheduler();
@@ -62,25 +61,35 @@ int main(void)
 }
 
 
-void vTask1Function(void *params)
+void vTaskButton(void *params)
 {
 	for(;;)
 	{
-		printMsg("task 1 printing\n\r");
-#ifdef USE_SEMIHOSTING
-		printf("task 1 printing\n");
-#endif
+		if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_0) == SET)
+		{
+			buttonPressedFlag = SET;
+		}
+		else
+		{
+			buttonPressedFlag = RESET;;
+		}
+		printMsg("Button Task\n\r");
 	}
 }
 
-void vTask2Function(void *params)
+void vTaskLED(void *params)
 {
 	for(;;)
 	{
-		printMsg("task 2 printing\n\r");
-#ifdef USE_SEMIHOSTING
-		printf("task 2 printing\n");
-#endif
+		if(buttonPressedFlag == SET)
+		{
+			setLED();
+		}
+		else
+		{
+			resetLED();
+		}
+		printMsg("LED Task\n\r");
 	}
 }
 static void prvSetupUART(void)
@@ -117,10 +126,62 @@ static void prvSetupUART(void)
 	USART_Cmd(USART6,ENABLE);
 }
 
+//discovery board user button is on PA0
+static void prvSetupButton(void)
+{
+	GPIO_InitTypeDef  gpioConfig;
+	//enable GPIOD peripheral bus clock
+	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA,ENABLE);
+	//clear GPIO config structure
+	memset(&gpioConfig,0,sizeof(gpioConfig));
+	//set PA0
+	gpioConfig.GPIO_Pin = GPIO_Pin_0;
+	gpioConfig.GPIO_Mode = GPIO_Mode_IN;	//set alternate function mode
+	gpioConfig.GPIO_OType = GPIO_OType_PP;
+	gpioConfig.GPIO_PuPd = GPIO_PuPd_NOPULL;	//enable pull up on both pins
+	GPIO_Init(GPIOA, &gpioConfig);			//set the pin config
+
+}
+void setLED(void)
+{
+	GPIO_WriteBit(GPIOD,GPIO_Pin_12,Bit_SET);
+	GPIO_WriteBit(GPIOD,GPIO_Pin_13,Bit_SET);
+	GPIO_WriteBit(GPIOD,GPIO_Pin_14,Bit_SET);
+	GPIO_WriteBit(GPIOD,GPIO_Pin_15,Bit_SET);
+}
+void resetLED(void)
+{
+	GPIO_WriteBit(GPIOD,GPIO_Pin_12,Bit_RESET);
+	GPIO_WriteBit(GPIOD,GPIO_Pin_13,Bit_RESET);
+	GPIO_WriteBit(GPIOD,GPIO_Pin_14,Bit_RESET);
+	GPIO_WriteBit(GPIOD,GPIO_Pin_15,Bit_RESET);
+}
+//discovery board has 4 leds
+	//GREEN LED on PD12
+	//ORANGE LED on PD13
+	//RED LED on PD14
+	//BLUE LED on PD15
+static void prvSetupLEDs(void)
+{
+	GPIO_InitTypeDef  gpioConfig;
+	//enable GPIOD peripheral bus clock
+	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD,ENABLE);
+	//clear GPIO config structure
+	memset(&gpioConfig,0,sizeof(gpioConfig));
+	//set PD12,PD13,PD14,PD15 as GPIOs
+	gpioConfig.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;//set both 6 and 7 as GPIO
+	gpioConfig.GPIO_Mode = GPIO_Mode_OUT;	//set alternate function mode
+	gpioConfig.GPIO_OType = GPIO_OType_PP;
+	gpioConfig.GPIO_PuPd = GPIO_PuPd_NOPULL;	//enable pull up on both pins
+	GPIO_Init(GPIOD, &gpioConfig);			//set the pin config
+
+}
 //This function will do all HW related settings
 static void prvSetupHardware(void)
 {
 	prvSetupUART();
+	prvSetupLEDs();
+	prvSetupButton();
 }
 void printMsg(char *msg)
 {
